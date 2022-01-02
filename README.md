@@ -1,4 +1,4 @@
-# Large Margin Loss with Pytorch
+# Large Margin Deep Networks for Classification with Pytorch
 This is a Pytorch implementation of Large Margin Deep Networks for Classification defined in the following paper : https://arxiv.org/abs/1803.05598
 
 The loss function is defined as following :
