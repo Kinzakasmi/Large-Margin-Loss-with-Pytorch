@@ -3,10 +3,11 @@ import torch.nn.functional as F
 import numpy as np
 
 def _max_with_relu(a, b):
+    """Maximum computation using ReLU in order to facilitate gradient computation"""
     return a + F.relu(b - a)
-
     
 def _get_grad(out_, in_):
+    """Get gradient from a given layer (out_,in_) of a feature map"""
     grad, *_ = torch.autograd.grad(out_, in_,
                                    grad_outputs=torch.ones_like(out_, dtype=torch.float32),
                                    retain_graph=True)
@@ -21,10 +22,9 @@ class LargeMarginLoss:
         dist_norm (1, 2, np.inf): Distance to boundary defined on norm
         epslion (float): Small number to avoid division by 0.
         use_approximation (bool):
-        agg_type ("all_top_k", "worst_top_k", "avg_top_k"):  If 'worst_top_k'
-            only consider the minimum distance to boundary of the top_k classes. If
-            'average_top_k' consider average distance to boundary. If 'all_top_k'
-            consider all top_k. When top_k = 1, these choices are equivalent.
+        agg_type ("max_top_k", "avg_top_k"):  If 'max_top_k'
+            only consider the maximum distance to boundary of the top_k classes. If
+            'avg_top_k' consider average distance to boundary.
     """
     def __init__(self, 
                 gamma=10000.0,
@@ -32,12 +32,12 @@ class LargeMarginLoss:
                 dist_norm=2,
                 epsilon=1e-8,
                 use_approximation=True,
-                agg_type="all_top_k"):
+                agg_type="avg_top_k"):
         
         self.dist_upper = gamma
         
         self.top_k = top_k
-        self.dual_norm = {1: np.inf, 2: 2, np.inf: 1}[dist_norm]
+        self.dual_norm = {1: np.inf, 2: 2, np.inf: 1}[dist_norm] #see definition of a dual norm
         self.eps = epsilon
         
         self.use_approximation = use_approximation
@@ -57,15 +57,15 @@ class LargeMarginLoss:
         prob = F.softmax(logits, dim=1)
         correct_prob = prob * onehot_labels
 
-        correct_prob = torch.sum(correct_prob, dim=1, keepdim=True)
-        other_prob = prob * (1.0 - onehot_labels)
+        correct_prob = torch.sum(correct_prob, dim=1, keepdim=True) #f_yk(x_k)
+        other_prob = prob * (1.0 - onehot_labels) #f_i(x_k) with i != y_k
         
         if self.top_k > 1:
             topk_prob, _ = other_prob.topk(self.top_k, dim=1)
         else:
             topk_prob, _ = other_prob.max(dim=1, keepdim=True)
         
-        # nom of d : f_i(x_k) - f_yk(x_k)
+        # nom of d : f_i(x_k) - f_yk(x_k) with i!=y_k
         diff_prob =  topk_prob - correct_prob
         
         loss = torch.empty(0, device=logits.device)
@@ -80,14 +80,18 @@ class LargeMarginLoss:
             
             #linear approximation of d :
             dist_to_boundary = diff_prob / (diff_gradnorm + self.eps) #eps to avoid dividing by 0
-            
-            loss_layer = self.dist_upper + dist_to_boundary
-            loss_layer = _max_with_relu(0,loss_layer)
+        
+            #loss_layer = max(0, gamma+d)
+            loss_layer = _max_with_relu(0,self.dist_upper + dist_to_boundary) #shape (batch_size,top_k)
 
+            #loss_layer = A max(0, gamma+d) with A=agg_type
             if self.agg_type == "max_top_k":
                 loss_layer, _ = loss_layer.max(dim=1)
             elif self.agg_type == "avg_top_k":
                 loss_layer = loss_layer.mean(dim=1)
+            else :
+                raise("Aggregation type not recognised")
                         
             loss = torch.cat([loss, loss_layer])
+            
         return loss.mean()
