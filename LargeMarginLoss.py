@@ -16,7 +16,7 @@ def _get_grad(out_, in_):
 class LargeMarginLoss:
     """Large Margin Loss
     A Pytorch Implementation of `Large Margin Deep Networks for Classification`
-    Arguments : 
+    Args : 
         gamma (float): Desired margin, and distance to boundary above the margin will be clipped.
         top_k (int): Number of top classes to include in the margin loss.
         dist_norm (1, 2, np.inf): Distance to boundary defined on norm
@@ -24,14 +24,15 @@ class LargeMarginLoss:
         use_approximation (bool):
         agg_type ("max_top_k", "avg_top_k"):  If 'max_top_k'
             only consider the maximum distance to boundary of the top_k classes. If
-            'avg_top_k' consider average distance to boundary.
+            'avg_top_k' consider average distance to boundary. If 'all_top_k' consider 
+            all distances to the boundary of the top_k classes.
     """
     def __init__(self, 
                 gamma=10000.0,
                 top_k=1,
                 dist_norm=2,
                 epsilon=1e-8,
-                use_approximation=True,
+                use_approximation=False,
                 agg_type="avg_top_k"):
         
         self.dist_upper = gamma
@@ -46,7 +47,7 @@ class LargeMarginLoss:
     def __call__(self, logits, onehot_labels, feature_maps):
         """Getting Large Margin loss
         
-        Arguments : 
+        Args : 
             logits (Tensor): output of Network before softmax
             onehot_labels (Tensor): One-hot shaped label
             feature_maps (list of Tensor): Target feature maps(Layer of NN) want to enforcing by Large Margin
@@ -89,6 +90,8 @@ class LargeMarginLoss:
                 loss_layer, _ = loss_layer.max(dim=1)
             elif self.agg_type == "avg_top_k":
                 loss_layer = loss_layer.mean(dim=1)
+            elif self.agg_type == "all_top_k":
+                pass
             else :
                 raise("Aggregation type not recognised")
                         
