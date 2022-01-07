@@ -1,11 +1,11 @@
 import torch
 import torch.nn.functional as F
 
-def train_lm(model, train_loader, optimizer, epoch, lm, device):
+def train_lm(model, train_loader, n_classes, optimizer, epoch, lm, device):
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
         data = data.to(device)
-        one_hot = torch.zeros(len(target), 10).scatter_(1, target.unsqueeze(1), 1.).float()
+        one_hot = torch.zeros(len(target), n_classes).scatter_(1, target.unsqueeze(1), 1.).float()
         one_hot = one_hot.to(device)
         optimizer.zero_grad()
         output, feature_maps = model(data)
